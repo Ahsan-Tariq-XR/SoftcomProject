@@ -53,6 +53,7 @@ namespace OneButtonRunner.Enemies
         protected virtual void Start()
         {
             CurrentHealth = maxHealth;
+            Debug.Log($"[{Type}] ✓ Spawned! HP: {CurrentHealth}, Speed: {moveSpeed}, Damage: {damage}, Immune to light: {immuneToLightAttacks}");
         }
 
         protected virtual void FixedUpdate()
@@ -121,19 +122,36 @@ namespace OneButtonRunner.Enemies
         {
             if (IsDead) return;
 
+            Debug.Log($"[{Type}] Collision with: {collision.gameObject.name} (Tag: {collision.gameObject.tag})");
+
             // Check if we hit the player
             if (collision.gameObject.CompareTag(GameConstants.TAG_PLAYER))
             {
-                var player = collision.gameObject.GetComponent<PlayerController>();
-                if (player != null)
-                {
-                    // Deal damage to player
-                    Vector2 knockbackDir = (collision.transform.position - transform.position).normalized;
-                    knockbackDir.x = -1f; // Always knock back (player is moving right)
-                    player.TakeDamage(damage, knockbackDir);
+                DealDamageToPlayer(collision.gameObject);
+            }
+        }
 
-                    Debug.Log($"[{Type}] Hit player for {damage} damage!");
-                }
+        protected virtual void OnCollisionStay2D(Collision2D collision)
+        {
+            if (IsDead) return;
+
+            // Continue dealing damage while in contact (invincibility handled by player)
+            if (collision.gameObject.CompareTag(GameConstants.TAG_PLAYER))
+            {
+                DealDamageToPlayer(collision.gameObject);
+            }
+        }
+
+        private void DealDamageToPlayer(GameObject playerObj)
+        {
+            var player = playerObj.GetComponent<PlayerController>();
+            if (player != null)
+            {
+                Vector2 knockbackDir = (playerObj.transform.position - transform.position).normalized;
+                knockbackDir.x = -1f; // Always knock back (player is moving right)
+                
+                // TakeDamage returns early if invincible, so we can call it freely
+                player.TakeDamage(damage, knockbackDir);
             }
         }
 
@@ -159,6 +177,7 @@ namespace OneButtonRunner.Enemies
             transform.position = spawnPosition;
             IsDead = false;
             CurrentHealth = maxHealth;
+            Debug.Log($"[{Type}] Initialize at {spawnPosition}, Flipped: {isFlipped}");
 
             if (isFlipped)
             {

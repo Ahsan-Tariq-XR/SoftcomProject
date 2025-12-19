@@ -22,6 +22,9 @@ namespace OneButtonRunner.Core
         [SerializeField] private float baseScrollSpeed = 5f;
         [SerializeField] private float speedIncreaseRate = 0.1f; // Speed increase per second
 
+        [Header("Debug")]
+        [SerializeField] private bool autoStartGame = true; // Toggle in Inspector for testing!
+
         public event Action<GameState> OnGameStateChanged;
         public event Action<float> OnScoreChanged;
 
@@ -34,11 +37,22 @@ namespace OneButtonRunner.Core
         {
             if (Instance != null && Instance != this)
             {
+                Debug.LogWarning("[GameManager] Duplicate instance destroyed!");
                 Destroy(gameObject);
                 return;
             }
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            Debug.Log($"[GameManager] ✓ Initialized! Base speed: {baseScrollSpeed}, Speed increase rate: {speedIncreaseRate}");
+        }
+
+        private void Start()
+        {
+            if (autoStartGame)
+            {
+                Debug.Log("[GameManager] Auto-starting game for testing...");
+                StartGame();
+            }
         }
 
         private void Update()
@@ -97,7 +111,9 @@ namespace OneButtonRunner.Core
 
         private void SetGameState(GameState newState)
         {
+            GameState oldState = CurrentState;
             CurrentState = newState;
+            Debug.Log($"[GameManager] State changed: {oldState} → {newState}");
             OnGameStateChanged?.Invoke(newState);
         }
     }

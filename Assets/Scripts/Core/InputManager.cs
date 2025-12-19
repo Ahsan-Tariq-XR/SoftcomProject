@@ -33,10 +33,12 @@ namespace OneButtonRunner.Core
             // Singleton pattern
             if (Instance != null && Instance != this)
             {
+                Debug.LogWarning("[InputManager] Duplicate instance destroyed!");
                 Destroy(gameObject);
                 return;
             }
             Instance = this;
+            Debug.Log($"[InputManager] ✓ Initialized! Hold threshold: {holdThreshold}s, Double-tap window: {doubleTapWindow}s");
         }
 
         private void Update()
@@ -73,14 +75,17 @@ namespace OneButtonRunner.Core
             pressStartTime = Time.time;
             isHolding = true;
             isCharging = false;
+            Debug.Log($"[InputManager] ▼ Button DOWN at {Time.time:F2}s");
 
             // Check for double tap
             if (waitingForDoubleTap && (Time.time - lastTapTime) <= doubleTapWindow)
             {
                 // Double tap detected!
+                float timeSinceLastTap = Time.time - lastTapTime;
                 waitingForDoubleTap = false;
+                Debug.Log($"[InputManager] ★★ DOUBLE TAP detected! Time between taps: {timeSinceLastTap:F3}s");
                 OnGravityFlip?.Invoke();
-                Debug.Log("[InputManager] GRAVITY FLIP!");
+                Debug.Log("[InputManager] → Event: OnGravityFlip invoked");
             }
         }
 
@@ -106,13 +111,15 @@ namespace OneButtonRunner.Core
 
             float holdDuration = Time.time - pressStartTime;
             isHolding = false;
+            Debug.Log($"[InputManager] ▲ Button UP - held for {holdDuration:F3}s");
 
             if (isCharging)
             {
                 // Was charging - release charged attack
                 isCharging = false;
+                Debug.Log($"[InputManager] ★ CHARGED ATTACK released! Charge time: {holdDuration:F2}s");
                 OnChargedAttackRelease?.Invoke();
-                Debug.Log("[InputManager] CHARGED ATTACK!");
+                Debug.Log("[InputManager] → Event: OnChargedAttackRelease invoked");
             }
             else if (holdDuration < holdThreshold)
             {
@@ -121,7 +128,12 @@ namespace OneButtonRunner.Core
                 {
                     waitingForDoubleTap = true;
                     lastTapTime = Time.time;
+                    Debug.Log($"[InputManager] ? Quick tap ({holdDuration:F3}s) - waiting for possible double-tap...");
                 }
+            }
+            else
+            {
+                Debug.Log($"[InputManager] ✗ Hold was {holdDuration:F3}s but charging didn't start (threshold: {holdThreshold}s)");
             }
         }
 
@@ -131,8 +143,9 @@ namespace OneButtonRunner.Core
             if (waitingForDoubleTap && (Time.time - lastTapTime) > doubleTapWindow)
             {
                 waitingForDoubleTap = false;
+                Debug.Log($"[InputManager] ★ LIGHT ATTACK (double-tap timed out after {doubleTapWindow}s)");
                 OnLightAttack?.Invoke();
-                Debug.Log("[InputManager] LIGHT ATTACK!");
+                Debug.Log("[InputManager] → Event: OnLightAttack invoked");
             }
         }
 

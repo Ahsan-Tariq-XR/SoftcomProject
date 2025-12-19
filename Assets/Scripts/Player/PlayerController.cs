@@ -22,6 +22,8 @@ namespace OneButtonRunner.Player
 
         [Header("Movement")]
         [SerializeField] private float moveSpeed = 5f;
+        [SerializeField] private float acceleration = 15f; // How fast player accelerates to target speed
+        [SerializeField] private float deceleration = 25f; // How fast player slows down (for knockback recovery)
 
         [Header("Gravity Flip")]
         [SerializeField] private float flipDuration = 0.3f;
@@ -34,14 +36,16 @@ namespace OneButtonRunner.Player
 
         [Header("Health")]
         [SerializeField] private int maxHealth = 100;
-        [SerializeField] private float knockbackForce = 3f;
-        [SerializeField] private float invincibilityTime = 1f;
+        [SerializeField] private float knockbackForce = 8f;  // Knockback on damage
 
         [Header("Visual Feedback")]
         [SerializeField] private SpriteRenderer spriteRenderer;
         [SerializeField] private Color normalColor = Color.white;
         [SerializeField] private Color chargingColor = Color.yellow;
         [SerializeField] private Color hurtColor = Color.red;
+
+        [Header("Testing")]
+        [SerializeField] private bool godMode = false; // Unlimited health for testing
 
         // Component references
         private Rigidbody2D rb;
@@ -54,8 +58,8 @@ namespace OneButtonRunner.Player
         public bool IsGravityFlipped { get; private set; }
 
         // Internal tracking
-        private bool isInvincible;
-        private float invincibilityTimer;
+        private bool isDead;
+        private bool isInKnockback; // Damage cooldown during knockback
         private float chargeStartTime;
 
         // Events
@@ -66,22 +70,27 @@ namespace OneButtonRunner.Player
         {
             if (Instance != null && Instance != this)
             {
+                Debug.LogWarning("[Player] Duplicate instance destroyed!");
                 Destroy(gameObject);
                 return;
             }
             Instance = this;
+            Debug.Log("[Player] ✓ PlayerController Awake");
 
             rb = GetComponent<Rigidbody2D>();
             boxCollider = GetComponent<BoxCollider2D>();
 
             if (spriteRenderer == null)
                 spriteRenderer = GetComponent<SpriteRenderer>();
+            
+            Debug.Log($"[Player] Components: RB={rb != null}, Collider={boxCollider != null}, Sprite={spriteRenderer != null}");
         }
 
         private void Start()
         {
             CurrentHealth = maxHealth;
             OnHealthChanged?.Invoke(CurrentHealth, maxHealth);
+            Debug.Log($"[Player] ✓ Health initialized: {CurrentHealth}/{maxHealth}");
 
             // Subscribe to input events
             if (InputManager.Instance != null)
@@ -90,7 +99,14 @@ namespace OneButtonRunner.Player
                 InputManager.Instance.OnChargeStart += StartCharging;
                 InputManager.Instance.OnChargedAttackRelease += PerformChargedAttack;
                 InputManager.Instance.OnGravityFlip += FlipGravity;
+                Debug.Log("[Player] ✓ Subscribed to InputManager events");
             }
+            else
+            {
+                Debug.LogError("[Player] ✗ InputManager.Instance is NULL! Input won't work!");
+            }
+            
+            Debug.Log($"[Player] Attack Point assigned: {attackPoint != null}, Enemy Layer: {enemyLayer.value}");
         }
 
         private void OnDestroy()
@@ -107,23 +123,6 @@ namespace OneButtonRunner.Player
 
         private void Update()
         {
-            // Handle invincibility timer
-            if (isInvincible)
-            {
-                invincibilityTimer -= Time.deltaTime;
-                if (invincibilityTimer <= 0)
-                {
-                    isInvincible = false;
-                    SetSpriteColor(normalColor);
-                }
-                else
-                {
-                    // Flash effect during invincibility
-                    float alpha = Mathf.PingPong(Time.time * 10f, 1f);
-                    spriteRenderer.color = new Color(normalColor.r, normalColor.g, normalColor.b, alpha);
-                }
-            }
-
             // Visual feedback for charging
             if (CurrentState == PlayerState.Charging)
             {
@@ -148,8 +147,23 @@ namespace OneButtonRunner.Player
 
         private void MoveForward()
         {
-            float speed = GameManager.Instance?.CurrentSpeed ?? moveSpeed;
-            rb.linearVelocity = new Vector2(speed, rb.linearVelocity.y);
+            float targetSpeed = GameManager.Instance?.CurrentSpeed ?? moveSpeed;
+            float currentSpeedX = rb.linearVelocity.x;
+            
+            // Accelerate towards target speed
+            float newSpeedX;
+            if (currentSpeedX < targetSpeed)
+            {
+                // Accelerating forward
+                newSpeedX = Mathf.MoveTowards(currentSpeedX, targetSpeed, acceleration * Time.fixedDeltaTime);
+            }
+            else
+            {
+                // Already at or above target (shouldn't normally happen but handle it)
+                newSpeedX = currentSpeedX;
+            }
+            
+            rb.linearVelocity = new Vector2(newSpeedX, rb.linearVelocity.y);
         }
 
         private void CheckGrounded()
@@ -198,23 +212,27 @@ namespace OneButtonRunner.Player
 
         private void PerformLightAttack()
         {
-            if (CurrentState == PlayerState.Stunned) return;
+            // No stun check - player can always attack
 
             CurrentState = PlayerState.Attacking;
-            Debug.Log("[Player] Light Attack!");
+            Vector3 attackPos = attackPoint != null ? attackPoint.position : transform.position;
+            Debug.Log($"[Player] ★ LIGHT ATTACK at position {attackPos}, range: {lightAttackRange}");
 
             // Detect enemies in range
             Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(
-                attackPoint != null ? attackPoint.position : transform.position,
+                attackPos,
                 lightAttackRange,
                 enemyLayer
             );
+            
+            Debug.Log($"[Player] Found {hitEnemies.Length} enemies in range");
 
             foreach (Collider2D enemy in hitEnemies)
             {
                 var enemyBase = enemy.GetComponent<Enemies.EnemyBase>();
                 if (enemyBase != null)
                 {
+                    Debug.Log($"[Player] → Hitting enemy: {enemy.gameObject.name}");
                     enemyBase.TakeDamage(GameConstants.LIGHT_ATTACK_DAMAGE, false);
                 }
             }
@@ -226,23 +244,31 @@ namespace OneButtonRunner.Player
 
         private void PerformChargedAttack()
         {
-            if (CurrentState != PlayerState.Charging) return;
+            if (CurrentState != PlayerState.Charging)
+            {
+                Debug.Log($"[Player] Charged attack blocked - state is {CurrentState}, not Charging");
+                return;
+            }
 
             CurrentState = PlayerState.Attacking;
-            Debug.Log("[Player] CHARGED Attack!");
+            Vector3 attackPos = attackPoint != null ? attackPoint.position : transform.position;
+            Debug.Log($"[Player] ★★ CHARGED ATTACK at position {attackPos}, range: {chargedAttackRange}");
 
             // Detect enemies in larger range
             Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(
-                attackPoint != null ? attackPoint.position : transform.position,
+                attackPos,
                 chargedAttackRange,
                 enemyLayer
             );
+            
+            Debug.Log($"[Player] Found {hitEnemies.Length} enemies in charged range");
 
             foreach (Collider2D enemy in hitEnemies)
             {
                 var enemyBase = enemy.GetComponent<Enemies.EnemyBase>();
                 if (enemyBase != null)
                 {
+                    Debug.Log($"[Player] → Hitting enemy with charged attack: {enemy.gameObject.name}");
                     enemyBase.TakeDamage(GameConstants.CHARGED_ATTACK_DAMAGE, true);
                 }
             }
@@ -258,7 +284,18 @@ namespace OneButtonRunner.Player
 
         public void TakeDamage(int damage, Vector2 knockbackDirection)
         {
-            if (isInvincible) return;
+            if (isDead) return; // No damage after death
+            if (isInKnockback) return; // One hit per knockback cycle
+
+            // God mode - still show feedback but don't take damage
+            if (godMode)
+            {
+                Debug.Log($"[Player] GOD MODE - Would have taken {damage} damage");
+                ApplyKnockback(knockbackDirection);
+                SetSpriteColor(hurtColor);
+                Invoke(nameof(ResetColor), 0.2f);
+                return;
+            }
 
             CurrentHealth -= damage;
             OnHealthChanged?.Invoke(CurrentHealth, maxHealth);
@@ -271,37 +308,42 @@ namespace OneButtonRunner.Player
                 return;
             }
 
-            // Knockback
+            // Knockback (no invincibility - just bounce back)
             ApplyKnockback(knockbackDirection);
-
-            // Invincibility frames
-            isInvincible = true;
-            invincibilityTimer = invincibilityTime;
             SetSpriteColor(hurtColor);
+            
+            // Flash back to normal after short delay
+            Invoke(nameof(ResetColor), 0.2f);
+        }
+
+        private void ResetColor()
+        {
+            if (!isDead)
+                SetSpriteColor(normalColor);
         }
 
         private void ApplyKnockback(Vector2 direction)
         {
-            CurrentState = PlayerState.Stunned;
-
-            // Apply knockback force
-            rb.linearVelocity = Vector2.zero;
-            rb.AddForce(direction.normalized * knockbackForce, ForceMode2D.Impulse);
-
-            // Recover after short delay
-            Invoke(nameof(RecoverFromStun), 0.3f);
+            // Simple knockback - just apply force, no stun state change
+            // Player can still attack during knockback
+            isInKnockback = true;
+            
+            // Apply knockback impulse (backwards + slight up)
+            rb.linearVelocity = new Vector2(0, rb.linearVelocity.y); // Zero out horizontal
+            rb.AddForce(new Vector2(-knockbackForce, knockbackForce * 0.3f), ForceMode2D.Impulse);
+            
+            // Damage cooldown for ~0.6s
+            Invoke(nameof(EndKnockback), 0.6f);
         }
 
-        private void RecoverFromStun()
+        private void EndKnockback()
         {
-            if (CurrentHealth > 0)
-            {
-                CurrentState = PlayerState.Running;
-            }
+            isInKnockback = false;
         }
 
         private void Die()
         {
+            isDead = true;
             CurrentState = PlayerState.Stunned;
             Debug.Log("[Player] DIED!");
             OnPlayerDied?.Invoke();
@@ -322,14 +364,45 @@ namespace OneButtonRunner.Player
 
         private void OnDrawGizmosSelected()
         {
-            // Visualize attack ranges in editor
+            DrawAttackGizmos(false);
+        }
+
+        private void OnDrawGizmos()
+        {
+            // Always show gizmos during play mode
+            if (Application.isPlaying)
+            {
+                DrawAttackGizmos(true);
+            }
+        }
+
+        private void DrawAttackGizmos(bool isPlayMode)
+        {
             Vector3 point = attackPoint != null ? attackPoint.position : transform.position;
 
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawWireSphere(point, lightAttackRange);
+            // Light attack range - yellow (bright when attacking)
+            if (isPlayMode && CurrentState == PlayerState.Attacking)
+            {
+                Gizmos.color = new Color(1f, 1f, 0f, 0.8f); // Bright yellow
+                Gizmos.DrawSphere(point, lightAttackRange); // Solid sphere when attacking
+            }
+            else
+            {
+                Gizmos.color = new Color(1f, 1f, 0f, 0.3f); // Faded yellow
+                Gizmos.DrawWireSphere(point, lightAttackRange);
+            }
 
-            Gizmos.color = Color.red;
-            Gizmos.DrawWireSphere(point, chargedAttackRange);
+            // Charged attack range - red (bright when charging)
+            if (isPlayMode && CurrentState == PlayerState.Charging)
+            {
+                Gizmos.color = new Color(1f, 0.3f, 0f, 0.5f); // Bright orange-red
+                Gizmos.DrawSphere(point, chargedAttackRange); // Solid sphere when charging
+            }
+            else
+            {
+                Gizmos.color = new Color(1f, 0f, 0f, 0.2f); // Faded red
+                Gizmos.DrawWireSphere(point, chargedAttackRange);
+            }
         }
 
         #endregion

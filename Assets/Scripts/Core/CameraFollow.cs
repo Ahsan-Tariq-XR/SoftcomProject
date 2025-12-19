@@ -9,7 +9,7 @@ namespace OneButtonRunner.Core
     public class CameraFollow : MonoBehaviour
     {
         [Header("Follow Settings")]
-        [SerializeField] private float offsetX = 5f; // How far ahead of player camera looks
+        [SerializeField] private float offsetX = 0f; // 0 = centered, positive = look ahead
         [SerializeField] private float offsetY = 0f;
         [SerializeField] private float smoothSpeed = 5f;
 

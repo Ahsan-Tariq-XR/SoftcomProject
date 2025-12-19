@@ -44,15 +44,25 @@ namespace OneButtonRunner.Level
 
         private void Start()
         {
+            Debug.Log("[Spawner] ✓ EnemySpawner Start");
             InitializePools();
 
             if (PlayerController.Instance != null)
             {
                 playerTransform = PlayerController.Instance.transform;
+                Debug.Log("[Spawner] ✓ Player reference found");
             }
+            else
+            {
+                Debug.LogError("[Spawner] ✗ PlayerController.Instance is NULL! Spawner won't work!");
+            }
+
+            // Check prefabs
+            Debug.Log($"[Spawner] Prefabs - Basic: {basicEnemyPrefab != null}, Medium: {mediumEnemyPrefab != null}, Unexpected: {unexpectedEnemyPrefab != null}");
 
             gameStartTime = Time.time;
             nextSpawnTime = Time.time + initialSpawnDelay;
+            Debug.Log($"[Spawner] First spawn in {initialSpawnDelay}s");
         }
 
         private void OnEnable()
@@ -183,7 +193,7 @@ namespace OneButtonRunner.Level
             enemy.SetActive(true);
             activeEnemies.Add(enemy);
 
-            Debug.Log($"[Spawner] Spawned {type} at {spawnPos}");
+            Debug.Log($"[Spawner] ★ Spawned {type} at {spawnPos} (Ceiling: {spawnOnCeiling}). Active enemies: {activeEnemies.Count}");
         }
 
         private EnemyType ChooseEnemyType()
