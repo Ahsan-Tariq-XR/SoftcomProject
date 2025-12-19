@@ -123,12 +123,16 @@ namespace OneButtonRunner.Core
             }
             else if (holdDuration < holdThreshold)
             {
-                // Quick tap - could be first of double tap or light attack
+                // Quick tap - FIRE FIRST (Optimistic)
+                Debug.Log($"[InputManager] ★ LIGHT ATTACK (Instant fire)");
+                OnLightAttack?.Invoke();
+                
+                // Check for double tap window
                 if (!waitingForDoubleTap)
                 {
                     waitingForDoubleTap = true;
                     lastTapTime = Time.time;
-                    Debug.Log($"[InputManager] ? Quick tap ({holdDuration:F3}s) - waiting for possible double-tap...");
+                    Debug.Log($"[InputManager] ? Waiting for possible double-tap...");
                 }
             }
             else
@@ -139,13 +143,11 @@ namespace OneButtonRunner.Core
 
         private void CheckDoubleTapTimeout()
         {
-            // If we're waiting for a second tap but it timed out, fire light attack
+            // Simply expire the double tap window if time passes
             if (waitingForDoubleTap && (Time.time - lastTapTime) > doubleTapWindow)
             {
                 waitingForDoubleTap = false;
-                Debug.Log($"[InputManager] ★ LIGHT ATTACK (double-tap timed out after {doubleTapWindow}s)");
-                OnLightAttack?.Invoke();
-                Debug.Log("[InputManager] → Event: OnLightAttack invoked");
+                // No delayed attack needed anymore - we already fired!
             }
         }
 

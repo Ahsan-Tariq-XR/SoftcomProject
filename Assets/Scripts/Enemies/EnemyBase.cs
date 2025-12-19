@@ -37,6 +37,7 @@ namespace OneButtonRunner.Enemies
         // Components
         protected Rigidbody2D rb;
         protected Collider2D col;
+        private bool isPaused; // Pause after hitting player
 
         // Events
         public System.Action<EnemyBase> OnEnemyDied;
@@ -60,6 +61,7 @@ namespace OneButtonRunner.Enemies
         {
             if (GameManager.Instance?.CurrentState != GameState.Playing) return;
             if (IsDead) return;
+            if (isPaused) return; // Skip movement during hit pause
 
             Move();
         }
@@ -152,7 +154,23 @@ namespace OneButtonRunner.Enemies
                 
                 // TakeDamage returns early if invincible, so we can call it freely
                 player.TakeDamage(damage, knockbackDir);
+                
+                // Pause enemy briefly after hitting player
+                StartCoroutine(PauseAfterHit());
             }
+        }
+
+        private System.Collections.IEnumerator PauseAfterHit()
+        {
+            // Stop movement
+            rb.linearVelocity = Vector2.zero;
+            isPaused = true;
+            
+            // Wait
+            yield return new WaitForSeconds(0.3f);
+            
+            // Resume movement smoothly
+            isPaused = false;
         }
 
         protected void FlashColor(Color flashColor)
