@@ -287,6 +287,10 @@ namespace OneButtonRunner.Player
             if (isDead) return; // No damage after death
             if (isInKnockback) return; // One hit per knockback cycle
 
+            // SET COOLDOWN IMMEDIATELY to prevent race condition
+            isInKnockback = true;
+            Invoke(nameof(EndKnockback), 0.8f); // 0.8s damage cooldown
+
             // God mode - still show feedback but don't take damage
             if (godMode)
             {
@@ -308,7 +312,7 @@ namespace OneButtonRunner.Player
                 return;
             }
 
-            // Knockback (no invincibility - just bounce back)
+            // Knockback physics
             ApplyKnockback(knockbackDirection);
             SetSpriteColor(hurtColor);
             
@@ -324,16 +328,36 @@ namespace OneButtonRunner.Player
 
         private void ApplyKnockback(Vector2 direction)
         {
-            // Simple knockback - just apply force, no stun state change
-            // Player can still attack during knockback
-            isInKnockback = true;
+            // Smooth horizontal knockback - no arc, just slide back
+            StartCoroutine(SmoothKnockbackRoutine());
+        }
+
+        private System.Collections.IEnumerator SmoothKnockbackRoutine()
+        {
+            float knockbackDistance = knockbackForce * 0.5f; // Convert force to distance
+            float knockbackDuration = 0.25f;
+            float elapsed = 0f;
             
-            // Apply knockback impulse (backwards + slight up)
-            rb.linearVelocity = new Vector2(0, rb.linearVelocity.y); // Zero out horizontal
-            rb.AddForce(new Vector2(-knockbackForce, knockbackForce * 0.3f), ForceMode2D.Impulse);
+            Vector3 startPos = transform.position;
+            Vector3 endPos = startPos + new Vector3(-knockbackDistance, 0, 0); // Straight back
             
-            // Damage cooldown for ~0.6s
-            Invoke(nameof(EndKnockback), 0.6f);
+            // Disable physics movement during knockback
+            rb.linearVelocity = new Vector2(0, rb.linearVelocity.y);
+            
+            while (elapsed < knockbackDuration)
+            {
+                elapsed += Time.deltaTime;
+                float t = elapsed / knockbackDuration;
+                // Smooth ease-out
+                float smoothT = 1f - Mathf.Pow(1f - t, 3f);
+                
+                transform.position = Vector3.Lerp(startPos, endPos, smoothT);
+                rb.linearVelocity = new Vector2(0, rb.linearVelocity.y); // Keep vertical, zero horizontal
+                
+                yield return null;
+            }
+            
+            transform.position = endPos;
         }
 
         private void EndKnockback()

@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 6892217442795158475}
   - component: {fileID: 3231485079694725994}
   - component: {fileID: 9222533916478826924}
+  - component: {fileID: 8478682384966022092}
   m_Layer: 9
   m_Name: BasicEnemy
   m_TagString: Enemy
@@ -29,7 +30,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
+  m_LocalScale: {x: 0.35, y: 0.35, z: 0.35}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -162,3 +163,22 @@ BoxCollider2D:
   m_AutoTiling: 0
   m_Size: {x: 1.28, y: 1.28}
   m_EdgeRadius: 0
+--- !u!114 &8478682384966022092
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6845852459277520108}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 46f11518b6a3acc49bb6b5b039dd1ec8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxHealth: 1
+  damage: 10
+  moveSpeed: 2
+  immuneToLightAttacks: 0
+  spriteRenderer: {fileID: 0}
+  normalColor: {r: 1, g: 1, b: 1, a: 1}
+  hurtColor: {r: 1, g: 0, b: 0, a: 1}
